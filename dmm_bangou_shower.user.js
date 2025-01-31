@@ -1,10 +1,11 @@
 // ==UserScript==
 // @name         DMM番号展示
-// @namespace    http://tampermonkey.net/
+// @namespace    https://github.com/candymagicshow/dmm_bangou_shower
 // @version      2.0
 // @description  在标题下方展示格式化后的番号
 // @author       candymagic
 // @match        https://video.dmm.co.jp/*
+// @match        https://www.dmm.co.jp/*
 // @icon         https://www.google.com/s2/favicons?sz=64&domain=dmm.co.jp
 // @grant        none
 // @run-at       document-end
@@ -30,11 +31,11 @@
         }
     };
 
-    // 智能定位器
+    // 定位器
     const positionStrategies = {
         // 标准商品列表页
         default: (target) => {
-            const container = target.closest('[data-e2eid="product-item"]') 
+            const container = target.closest('[data-e2eid="product-item"]')
                 || target.closest('.c-item');
             return {
                 parent: container || target.parentElement,
@@ -101,7 +102,7 @@
 
             // 判断页面类型
             const pageType = target.closest('.pickup-details') ? 'pickup' : 'default';
-            
+
             // 获取插入位置
             const strategy = positionStrategies[pageType](target);
             if (!strategy.parent) return;
