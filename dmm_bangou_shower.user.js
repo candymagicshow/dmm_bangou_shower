@@ -25,16 +25,16 @@
 
     // CID样式配置
     const cidStyle = {
-        display: 'inline-block',
-        color: '#d32f2f',
-        fontSize: '11px',
-        fontWeight: 'bold',
-        padding: '2px 8px',
-        backgroundColor: '#ffebee',
+        display:'inline-block',
+        color: 'rgb(198, 40, 40)',
+        fontSize: '12px',
+        fontWeight: '600',
+        padding: '4px 8px',
+        background: 'rgb(255, 235, 238)',
         borderRadius: '4px',
-        border: '1px solid #ffcdd2',
-        marginTop: '4px',
-        boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+        border: '1px solid rgb(239, 154, 154)',
+        margin: '3px 0px',
+        lineHeight: '1.4'
     };
 
     // CID处理模块
