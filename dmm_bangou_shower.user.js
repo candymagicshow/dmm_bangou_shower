@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         DMM 番号展示器
+// @name         DMM番号展示
 // @namespace    http://tampermonkey.net/
-// @version      1.0
+// @version      2.0
 // @description  在标题下方展示格式化后的番号
 // @author       candymagic
 // @match        https://video.dmm.co.jp/*
@@ -13,119 +13,121 @@
 (function() {
     'use strict';
 
-    // 样式配置
+    // 通用样式配置
     const styleConfig = {
-        container: {
-            display: 'block',
-            margin: '4px 0 8px',
-            lineHeight: 1.2
-        },
         cidBadge: {
             display: 'inline-block',
-            color: '#d32f2f',
+            color: '#c62828',
             fontSize: '12px',
             fontWeight: 600,
             padding: '4px 8px',
             background: '#ffebee',
             borderRadius: '4px',
-            border: '1px solid #ffcdd2',
+            border: '1px solid #ef9a9a',
             //fontFamily: 'monospace',
-            letterSpacing: '0.5px'
+            margin: '3px 0',
+            lineHeight: 1.4
         }
     };
 
-    // CID提取正则
-    const extractCID = url => {
-        const cidMatch = url.match(/\/(cid=([^\/]+))/i);
-        return cidMatch ? cidMatch[2] : null;
-    };
+    // 智能定位器
+    const positionStrategies = {
+        // 标准商品列表页
+        default: (target) => {
+            const container = target.closest('[data-e2eid="product-item"]') 
+                || target.closest('.c-item');
+            return {
+                parent: container || target.parentElement,
+                insertBefore: target.nextElementSibling
+            };
+        },
 
-    // CID智能格式化
-    const formatCID = rawCID => {
-        // 拆解字母数字部分
-        const match = rawCID.match(/^([a-z]+)(\d+)$/i);
-        if (!match) return rawCID;
-
-        const letters = match[1].toUpperCase();
-        const numbers = match[2];
-        const numValue = parseInt(numbers, 10);
-
-        // 数字部分处理
-        let formattedNumber;
-        if (numValue < 100) {
-            formattedNumber = numValue.toString().padStart(3, '0'); // 补零
-        } else if (numValue >= 100 && numValue < 1000) {
-            formattedNumber = numValue.toString(); // 直接显示三位数
-        } else {
-            formattedNumber = numbers; // 保留原始数字格式
-        }
-
-        // 清理前导零（仅限三位数以上）
-        if (numValue >= 1000) {
-            formattedNumber = numbers.replace(/^0+/, '');
-        }
-
-        return `${letters}-${formattedNumber}`;
-    };
-
-    // 创建展示元素
-    const createCIDElement = cid => {
-        const container = document.createElement('div');
-        Object.assign(container.style, styleConfig.container);
-
-        const badge = document.createElement('span');
-        badge.textContent = formatCID(cid);
-        Object.assign(badge.style, styleConfig.cidBadge);
-
-        container.appendChild(badge);
-        return container;
-    };
-
-    // 智能插入逻辑
-    const insertAfterTitle = (titleElement, cidElement) => {
-        // 查找最近的公共容器
-        const parentContainer = titleElement.closest('[class*="container"]')
-            || titleElement.closest('.c-item')
-            || titleElement.parentElement;
-
-        // 精确插入到标题元素之后
-        if (parentContainer) {
-            parentContainer.insertBefore(
-                cidElement,
-                titleElement.nextElementSibling
-            );
+        // 精选页面
+        pickup: (target) => {
+            const container = target.closest('.pickup-details');
+            return {
+                parent: container,
+                insertBefore: container.querySelector('.tx-sublink, .tx-price')
+            };
         }
     };
 
-    // 主处理流程
-    const processTitles = () => {
-        const selector = 'a[data-e2eid="title"][href*="/cid="]:not([data-cid-final])';
+    // CID处理
+    const processCID = {
+        // 通用CID提取
+        extract: (url) => {
+            const cidMatch = url.match(/\/(?:cid=|cid=)([^\/?]+)/i);
+            return cidMatch ? cidMatch[1] : null;
+        },
 
-        document.querySelectorAll(selector).forEach(title => {
-            const rawCID = extractCID(title.href);
+        // 智能格式化
+        format: (rawCID) => {
+            const match = rawCID.match(/^([a-z]+)(\d+)$/i);
+            if (!match) return rawCID;
+
+            const letters = match[1].toUpperCase();
+            let numbers = match[2].replace(/^0+/, '');
+
+            // 特殊处理短编号
+            if (numbers.length < 3) {
+                numbers = numbers.padStart(3, '0');
+            }
+
+            return `${letters}-${numbers}`;
+        },
+
+        // 创建展示元素
+        createElement: (cid) => {
+            const badge = document.createElement('div');
+            badge.textContent = cid;
+            Object.assign(badge.style, styleConfig.cidBadge);
+            return badge;
+        }
+    };
+
+    // 多模式处理
+    const processMultiLayout = () => {
+        // 匹配两种页面结构的选择器
+        const selectors = [
+            // 标准商品项
+            'a[data-e2eid="title"][href*="/cid="]:not([data-cid-processed])',
+            // 新版精选项
+            '.pickup-details a[href*="/cid="]:not([data-cid-processed])'
+        ];
+
+        document.querySelectorAll(selectors.join(',')).forEach(target => {
+            const rawCID = processCID.extract(target.href);
             if (!rawCID) return;
 
-            const cidElement = createCIDElement(rawCID);
-            insertAfterTitle(title, cidElement);
+            // 判断页面类型
+            const pageType = target.closest('.pickup-details') ? 'pickup' : 'default';
+            
+            // 获取插入位置
+            const strategy = positionStrategies[pageType](target);
+            if (!strategy.parent) return;
 
-            title.dataset.cidFinal = 'processed';
+            // 创建并插入元素
+            const cidElement = processCID.createElement(processCID.format(rawCID));
+            strategy.parent.insertBefore(cidElement, strategy.insertBefore);
+
+            // 标记已处理
+            target.dataset.cidProcessed = true;
         });
     };
 
-    // 高性能DOM监听
+    // DOM监听
     const observer = new MutationObserver(mutations => {
-        mutations.forEach(mutation => {
-            if (mutation.addedNodes.length) {
-                processTitles();
-            }
-        });
+        if (mutations.some(m => m.addedNodes.length > 0)) {
+            requestAnimationFrame(processMultiLayout);
+        }
     });
 
     observer.observe(document, {
         childList: true,
-        subtree: true
+        subtree: true,
+        attributes: false
     });
 
     // 初始执行
-    processTitles();
+    processMultiLayout();
 })();
